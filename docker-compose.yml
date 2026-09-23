@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cloud-orders-postgres
+    environment:
+      POSTGRES_DB: cloud_orders
+      POSTGRES_USER: cloud_orders
+      POSTGRES_PASSWORD: cloud_orders
+    ports:
+      - "5432:5432"
+    volumes:
+      - cloud_orders_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "cloud_orders", "-d", "cloud_orders"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  app:
+    image: cloud-orders:local
+    container_name: cloud-orders-app
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/cloud_orders
+      DB_USERNAME: cloud_orders
+      DB_PASSWORD: cloud_orders
+      SPRING_DATASOURCE_HIKARI_CONNECTIONTIMEOUT: "5000"
+      SPRING_DATASOURCE_HIKARI_VALIDATIONTIMEOUT: "1000"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  cloud_orders_pg_data:
