@@ -47,7 +47,7 @@ void acceptsMinimumAmount() throws Exception {
     mockMvc.perform(post("/orders")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
-                        {"customerEmail":"email@mail.com","totalAmount":0.01}
+                        {"customerEmail":"email@mail.com","totalAmount":0.02}
                         """))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.id").isNotEmpty())
