@@ -26,4 +26,4 @@ jobs:
           java-version: '21'
 
       - name: Build and test
-        run: ./mnw --batch-mode --no-transfer-progress clean verify
+        run: ./mvnw --batch-mode --no-transfer-progress clean verify
