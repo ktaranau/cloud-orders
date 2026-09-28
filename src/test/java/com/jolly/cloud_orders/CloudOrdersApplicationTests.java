@@ -7,8 +7,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import com.jolly.cloud_orders.orders.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.security.test.context.support.WithMockUser;
 
-
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,10 +42,18 @@ void clearOrders() {
     orderRepository.deleteAll();
 }
 
+@Test
+void rejectsAnonymousOrdersRequest() throws Exception {
+    mockMvc.perform(get("/orders")
+                    .accept(MediaType.APPLICATION_JSON))
+            .andExpect(status().isUnauthorized());
+}
 
 @Test
+@WithMockUser(username = "test-user")
 void acceptsMinimumAmount() throws Exception {
     mockMvc.perform(post("/orders")
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"email@mail.com","totalAmount":0.01}
@@ -59,6 +68,7 @@ void acceptsMinimumAmount() throws Exception {
 
 
 @Test
+@WithMockUser(username = "test-user")
 void returns404ForMissingOrder() throws Exception {
     mockMvc.perform(get("/orders/{id}", "00000000-0000-0000-0000-000000000001"))
             .andExpect(status().isNotFound())
@@ -66,8 +76,10 @@ void returns404ForMissingOrder() throws Exception {
 }
 
 @Test
+@WithMockUser(username = "test-user")
 void rejectsZeroAmountWithoutSavingOrder() throws Exception {
     mockMvc.perform(post("/orders")
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"email@mail.com","totalAmount":0}
@@ -80,8 +92,10 @@ void rejectsZeroAmountWithoutSavingOrder() throws Exception {
 }
 
 @Test
+@WithMockUser(username = "test-user")
 void rejectsInvalidEmailWithoutSavingOrder() throws Exception {
     mockMvc.perform(post("/orders")
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"bad-email","totalAmount":123.45}
@@ -94,8 +108,10 @@ void rejectsInvalidEmailWithoutSavingOrder() throws Exception {
 }
 
 @Test
+@WithMockUser(username = "test-user")
 void createsAndReadsOrder() throws Exception {
     String response = mockMvc.perform(post("/orders")
+                    .with(csrf())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"integration@example.com","totalAmount":123.45}
@@ -113,6 +129,38 @@ void createsAndReadsOrder() throws Exception {
             .andExpect(jsonPath("$.status").value("CREATED"))
             .andExpect(jsonPath("$.totalAmount").value(123.45));
 }
+
+    @Test
+    @WithMockUser(username = "test-user")
+    void rejectsInfoEvenForAuthenticatedUser() throws Exception {
+        mockMvc.perform(get("/actuator/info")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void allowsAnonymousReadinessCheck() throws Exception {
+        mockMvc.perform(get("/actuator/health/readiness")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    @WithMockUser(username = "test-user")
+    void rejectsAuthenticatedPostWithoutCsrf() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                "customerEmail": "security@example.com",
+                                "totalAmount": 123.45
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        assertThat(orderRepository.count()).isZero();
+    }
 
     @Test
     void contextLoads() {
