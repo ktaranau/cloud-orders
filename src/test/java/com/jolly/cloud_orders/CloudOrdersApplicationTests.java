@@ -7,9 +7,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import com.jolly.cloud_orders.orders.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.http.HttpHeaders;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -50,10 +50,9 @@ void rejectsAnonymousOrdersRequest() throws Exception {
 }
 
 @Test
-@WithMockUser(username = "test-user")
 void acceptsMinimumAmount() throws Exception {
     mockMvc.perform(post("/orders")
-                    .with(csrf())
+                    .with(jwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"email@mail.com","totalAmount":0.01}
@@ -68,18 +67,17 @@ void acceptsMinimumAmount() throws Exception {
 
 
 @Test
-@WithMockUser(username = "test-user")
 void returns404ForMissingOrder() throws Exception {
-    mockMvc.perform(get("/orders/{id}", "00000000-0000-0000-0000-000000000001"))
+    mockMvc.perform(get("/orders/{id}", "00000000-0000-0000-0000-000000000001")
+                    .with(jwt()))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.status").value(404));
 }
 
 @Test
-@WithMockUser(username = "test-user")
 void rejectsZeroAmountWithoutSavingOrder() throws Exception {
     mockMvc.perform(post("/orders")
-                    .with(csrf())
+                    .with(jwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"email@mail.com","totalAmount":0}
@@ -92,10 +90,9 @@ void rejectsZeroAmountWithoutSavingOrder() throws Exception {
 }
 
 @Test
-@WithMockUser(username = "test-user")
 void rejectsInvalidEmailWithoutSavingOrder() throws Exception {
     mockMvc.perform(post("/orders")
-                    .with(csrf())
+                    .with(jwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"bad-email","totalAmount":123.45}
@@ -108,10 +105,9 @@ void rejectsInvalidEmailWithoutSavingOrder() throws Exception {
 }
 
 @Test
-@WithMockUser(username = "test-user")
 void createsAndReadsOrder() throws Exception {
     String response = mockMvc.perform(post("/orders")
-                    .with(csrf())
+                    .with(jwt())
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""
                         {"customerEmail":"integration@example.com","totalAmount":123.45}
@@ -122,7 +118,8 @@ void createsAndReadsOrder() throws Exception {
 
     String id = JsonPath.read(response, "$.id");
 
-    mockMvc.perform(get("/orders/{id}", id))
+    mockMvc.perform(get("/orders/{id}", id)
+                    .with(jwt()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value(id))
             .andExpect(jsonPath("$.customerEmail").value("integration@example.com"))
@@ -131,9 +128,9 @@ void createsAndReadsOrder() throws Exception {
 }
 
     @Test
-    @WithMockUser(username = "test-user")
     void rejectsInfoEvenForAuthenticatedUser() throws Exception {
         mockMvc.perform(get("/actuator/info")
+                        .with(jwt())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden());
     }
@@ -147,8 +144,7 @@ void createsAndReadsOrder() throws Exception {
     }
 
     @Test
-    @WithMockUser(username = "test-user")
-    void rejectsAuthenticatedPostWithoutCsrf() throws Exception {
+    void rejectsAnonymousPostWithoutSavingOrder() throws Exception {
         mockMvc.perform(post("/orders")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -157,9 +153,16 @@ void createsAndReadsOrder() throws Exception {
                                 "totalAmount": 123.45
                                 }
                                 """))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
         assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void rejectsMalformedBearerToken() throws Exception {
+        mockMvc.perform(get("/orders")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
