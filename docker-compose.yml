@@ -26,11 +26,31 @@ services:
       DB_PASSWORD: cloud_orders
       SPRING_DATASOURCE_HIKARI_CONNECTIONTIMEOUT: "5000"
       SPRING_DATASOURCE_HIKARI_VALIDATIONTIMEOUT: "1000"
+      JWT_ISSUER_URI: http://localhost:8180/realms/cloud-orders
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/cloud-orders/protocol/openid-connect/certs
+      JWT_AUDIENCE: cloud-orders-api
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin-local-only
+      KC_DB: dev-file
+      KC_HOSTNAME: "http://localhost:8180"
+      ORDERS_WORKER_SECRET: ${ORDERS_WORKER_SECRET:?Set ORDERS_WORKER_SECRET in .env}
+    ports:
+      - "127.0.0.1:8180:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
+    mem_limit: 1g
+
 volumes:
   cloud_orders_pg_data:
+  keycloak_data:
