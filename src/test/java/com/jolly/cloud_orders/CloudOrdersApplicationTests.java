@@ -9,6 +9,10 @@ import com.jolly.cloud_orders.orders.OrderRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.http.HttpHeaders;
 
+import java.util.Collections;
+
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -30,107 +34,109 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Import(CloudOrdersApplicationTests.Containers.class)
 class CloudOrdersApplicationTests {
 
-@Autowired
-MockMvc mockMvc;
+    @Autowired
+    MockMvc mockMvc;
 
-@Autowired
-OrderRepository orderRepository;
-
-
-@BeforeEach
-void clearOrders() {
-    orderRepository.deleteAll();
-}
-
-@Test
-void rejectsAnonymousOrdersRequest() throws Exception {
-    mockMvc.perform(get("/orders")
-                    .accept(MediaType.APPLICATION_JSON))
-            .andExpect(status().isUnauthorized());
-}
-
-@Test
-void acceptsMinimumAmount() throws Exception {
-    mockMvc.perform(post("/orders")
-                    .with(jwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""
-                        {"customerEmail":"email@mail.com","totalAmount":0.01}
-                        """))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.id").isNotEmpty())
-            .andExpect(jsonPath("$.totalAmount").value(0.01));
-                    
-    assertThat(orderRepository.count()).isEqualTo(1L);
-	
-}
+    @Autowired
+    OrderRepository orderRepository;
 
 
-@Test
-void returns404ForMissingOrder() throws Exception {
-    mockMvc.perform(get("/orders/{id}", "00000000-0000-0000-0000-000000000001")
-                    .with(jwt()))
-            .andExpect(status().isNotFound())
-            .andExpect(jsonPath("$.status").value(404));
-}
+    @BeforeEach
+    void clearOrders() {
+        orderRepository.deleteAll();
+    }
 
-@Test
-void rejectsZeroAmountWithoutSavingOrder() throws Exception {
-    mockMvc.perform(post("/orders")
-                    .with(jwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""
-                        {"customerEmail":"email@mail.com","totalAmount":0}
-                        """))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.fieldErrors[*].field")
-                    .value(hasItem("totalAmount")));
+    @Test
+    void rejectsAnonymousOrdersRequest() throws Exception {
+        mockMvc.perform(get("/orders")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+    }
 
-    assertThat(orderRepository.count()).isZero();
-}
+    @Test
+    void acceptsMinimumAmount() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"email@mail.com","totalAmount":0.01}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.totalAmount").value(0.01));
 
-@Test
-void rejectsInvalidEmailWithoutSavingOrder() throws Exception {
-    mockMvc.perform(post("/orders")
-                    .with(jwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""
-                        {"customerEmail":"bad-email","totalAmount":123.45}
-                        """))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.fieldErrors[*].field")
-                    .value(hasItem("customerEmail")));
+        assertThat(orderRepository.count()).isEqualTo(1L);
 
-    assertThat(orderRepository.count()).isZero();
-}
+    }
 
-@Test
-void createsAndReadsOrder() throws Exception {
-    String response = mockMvc.perform(post("/orders")
-                    .with(jwt())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""
-                        {"customerEmail":"integration@example.com","totalAmount":123.45}
-                        """))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.id").isNotEmpty())
-            .andReturn().getResponse().getContentAsString();
 
-    String id = JsonPath.read(response, "$.id");
+    @Test
+    void returns404ForMissingOrder() throws Exception {
+        mockMvc.perform(get("/orders/{id}", "00000000-0000-0000-0000-000000000001")
+                .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:read"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
 
-    mockMvc.perform(get("/orders/{id}", id)
-                    .with(jwt()))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.id").value(id))
-            .andExpect(jsonPath("$.customerEmail").value("integration@example.com"))
-            .andExpect(jsonPath("$.status").value("CREATED"))
-            .andExpect(jsonPath("$.totalAmount").value(123.45));
-}
+    @Test
+    void rejectsZeroAmountWithoutSavingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"email@mail.com","totalAmount":0}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[*].field")
+                        .value(hasItem("totalAmount")));
+
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void rejectsInvalidEmailWithoutSavingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"bad-email","totalAmount":123.45}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[*].field")
+                        .value(hasItem("customerEmail")));
+
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void createsAndReadsOrder() throws Exception {
+        String response = mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"integration@example.com","totalAmount":123.45}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        String id = JsonPath.read(response, "$.id");
+
+        mockMvc.perform(get("/orders/{id}", id)
+                .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:read"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.customerEmail").value("integration@example.com"))
+                .andExpect(jsonPath("$.status").value("CREATED"))
+                .andExpect(jsonPath("$.totalAmount").value(123.45));
+    }
 
     @Test
     void rejectsInfoEvenForAuthenticatedUser() throws Exception {
         mockMvc.perform(get("/actuator/info")
-                        .with(jwt())
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("SCOPE_orders:read"),
+                                new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isForbidden());
     }
@@ -163,6 +169,48 @@ void createsAndReadsOrder() throws Exception {
         mockMvc.perform(get("/orders")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void rejectsReadOnlyTokenWhenCreatingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("SCOPE_orders:read")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"customerEmail":"scope@example.com","totalAmount":12.34}
+                            """))
+                .andExpect(status().isForbidden());
+
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void rejectsWriteOnlyTokenWhenReadingOrders() throws Exception {
+        mockMvc.perform(get("/orders")
+                        .with(jwt().authorities(
+                                new SimpleGrantedAuthority("SCOPE_orders:write"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rejectsTokenWithoutAuthoritiesWhenReadingOrders() throws Exception {
+        mockMvc.perform(get("/orders")
+                        .with(jwt().authorities(Collections.emptyList())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rejectsTokenWithoutAuthoritiesWhenCreatingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(Collections.emptyList()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                            {"customerEmail":"scope@example.com","totalAmount":12.34}
+                            """))
+                .andExpect(status().isForbidden());
+
+        assertThat(orderRepository.count()).isZero();
     }
 
     @Test

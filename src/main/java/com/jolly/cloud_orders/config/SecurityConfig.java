@@ -1,6 +1,7 @@
 package com.jolly.cloud_orders.config;
 
 import jakarta.servlet.DispatcherType;
+import org.springframework.http.HttpMethod;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -17,12 +18,13 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                                .requestMatchers("/actuator/health", "/actuator/health/**")
-                                .permitAll()
-                                .requestMatchers("/orders", "/orders/**")
-                                .authenticated()
-                                .anyRequest().denyAll()
-                        )
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(HttpMethod.GET,"/orders", "/orders/**")
+                        .hasAuthority("SCOPE_orders:read")
+                        .requestMatchers(HttpMethod.POST, "/orders")
+                        .hasAuthority("SCOPE_orders:write")
+                        .anyRequest().denyAll()
+                )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
