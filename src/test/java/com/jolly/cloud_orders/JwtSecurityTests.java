@@ -122,12 +122,31 @@ class JwtSecurityTests {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
     }
 
+    @Test
+    void rejectsSignedTokenWithEmptyScope() throws Exception {
+        String token = sign(validClaims()
+                .claim("scope", "")
+                .build(), TRUSTED_KEY);
+
+        requestOrders(token).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void rejectsSignedWriteOnlyTokenWhenReadingOrders() throws Exception {
+        String token = sign(validClaims()
+                .claim("scope", "orders:write")
+                .build(), TRUSTED_KEY);
+
+        requestOrders(token).andExpect(status().isForbidden());
+    }
+
     private static JWTClaimsSet.Builder validClaims() {
         Instant now = Instant.now();
         return new JWTClaimsSet.Builder()
                 .issuer(ISSUER)
                 .subject("test-service-account")
                 .audience(AUDIENCE)
+                .claim("scope", "orders:read")
                 .issueTime(Date.from(now.minusSeconds(600)))
                 .notBeforeTime(Date.from(now.minusSeconds(600)))
                 .expirationTime(Date.from(now.plusSeconds(600)));

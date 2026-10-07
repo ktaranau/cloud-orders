@@ -17,7 +17,7 @@
       "directAccessGrantsEnabled": false,
       "fullScopeAllowed": false,
       "defaultClientScopes": [],
-      "optionalClientScopes": [],
+      "optionalClientScopes": ["orders:read", "orders:write"],
       "protocolMappers": [
         {
           "name": "cloud-orders-api-audience",
@@ -30,6 +30,24 @@
           }
         }
       ]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "orders:read",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "orders:write",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
     }
   ]
 }
