@@ -36,4 +36,5 @@ If you manually switch to a different parent and actually want the inheritance, 
 
 ### Local Keycloak
 
-Create .env, from .env.example put a local secret, run compose. Realm will be imported if it's not there. Address: 8180. This is dev-only and secrets are not commited.
+Create .env, from .env.example put a local secret, run compose. Realm will be imported if it's not there. Address: 8180. This is dev-only and secrets are not committed.
+2 Clients, orders-reader and orders-worker with corresponding scopes and different secrets. 

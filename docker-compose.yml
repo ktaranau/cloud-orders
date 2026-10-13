@@ -44,6 +44,7 @@ services:
       KC_DB: dev-file
       KC_HOSTNAME: "http://localhost:8180"
       ORDERS_WORKER_SECRET: ${ORDERS_WORKER_SECRET:?Set ORDERS_WORKER_SECRET in .env}
+      ORDERS_READER_SECRET: ${ORDERS_READER_SECRET:?Set ORDERS_READER_SECRET in .env}
     ports:
       - "127.0.0.1:8180:8080"
     volumes:
