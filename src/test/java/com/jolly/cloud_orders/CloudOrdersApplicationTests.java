@@ -132,6 +132,48 @@ class CloudOrdersApplicationTests {
     }
 
     @Test
+    void rejectsEmptyEmailWithoutSavingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"","totalAmount":12.34}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("customerEmail")));
+
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void rejectsExcessFractionalDigitsWithoutSavingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"validation@example.com","totalAmount":1.234}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("totalAmount")));
+
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
+    void rejectsOversizedAmountWithoutSavingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"validation@example.com","totalAmount":10000000000.00}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("totalAmount")));
+
+        assertThat(orderRepository.count()).isZero();
+    }
+
+    @Test
     void rejectsInfoEvenForAuthenticatedUser() throws Exception {
         mockMvc.perform(get("/actuator/info")
                         .with(jwt().authorities(
