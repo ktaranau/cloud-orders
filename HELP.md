@@ -38,3 +38,11 @@ If you manually switch to a different parent and actually want the inheritance, 
 
 Create .env, from .env.example put a local secret, run compose. Realm will be imported if it's not there. Address: 8180. This is dev-only and secrets are not committed.
 2 Clients, orders-reader and orders-worker with corresponding scopes and different secrets. 
+
+### Test
+
+CloudOrdersApplicationTests - checks if API accepts or rejects with issued token
+
+JwtSecurityTests - checks if API rejects fake signature, wrong issuer, outdated token
+
+KeycloakContractTests - checks that Keycloak gives each client correct permissions
