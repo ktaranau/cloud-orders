@@ -3,6 +3,7 @@ package com.jolly.cloud_orders.orders;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -12,20 +13,38 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
 
+    private static final BigDecimal MAX_TOTAL = new BigDecimal("9999999999.99");
+
     public OrderService(OrderRepository orderRepository) {
         this.orderRepository = orderRepository;
     }
 
     @Transactional
     public OrderResponse create(CreateOrderRequest request) {
+        BigDecimal totalSum = request.items().stream().map(item ->
+                        item.unitPrice()
+                                .multiply(BigDecimal.valueOf(
+                                item.quantity()
+                        ))
+                ).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalSum.compareTo(MAX_TOTAL) > 0) {
+            throw new OrderTotalTooLargeException(totalSum);
+        }
         Order order = new Order(
                 UUID.randomUUID(),
                 request.customerEmail(),
                 OrderStatus.CREATED,
-                request.totalAmount(),
+                totalSum,
                 OffsetDateTime.now()
         );
-
+        request.items().forEach(item -> {
+            order.addItem(new OrderItem(
+                    UUID.randomUUID(),
+                    item.sku(),
+                    item.quantity(),
+                    item.unitPrice()
+            ));
+        });
         return OrderResponse.from(orderRepository.save(order));
     }
 

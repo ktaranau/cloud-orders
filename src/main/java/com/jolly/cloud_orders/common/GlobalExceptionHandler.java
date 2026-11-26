@@ -1,6 +1,7 @@
 package com.jolly.cloud_orders.common;
 
 import com.jolly.cloud_orders.orders.OrderNotFoundException;
+import com.jolly.cloud_orders.orders.OrderTotalTooLargeException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -40,6 +41,19 @@ public class GlobalExceptionHandler {
                 HttpStatus.NOT_FOUND.getReasonPhrase(),
                 exception.getMessage(),
                 List.of()
+        );
+    }
+
+    @ExceptionHandler(OrderTotalTooLargeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleOrderTotalTooLarge(OrderTotalTooLargeException exception) {
+        return new ApiError(
+                OffsetDateTime.now(),
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                exception.getMessage(),
+                List.of(new ApiError.FieldError(
+                        "items", "order total must not exceed 9999999999.99"))
         );
     }
 }
