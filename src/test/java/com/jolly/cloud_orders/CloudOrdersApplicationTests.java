@@ -85,6 +85,21 @@ class CloudOrdersApplicationTests {
         assertThat(orderRepository.count()).isZero();
     }
 
+    @Test
+    void rejectsOrderTotalAboveStorageLimitWithoutSavingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"email@mail.com",
+                                "items":[{"sku":"BOOK-1","quantity":1000,"unitPrice":9999999999.99}]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("items")));
+
+        assertThat(orderRepository.count()).isZero();
+    }
+
 
     @Test
     void returns404ForMissingOrder() throws Exception {

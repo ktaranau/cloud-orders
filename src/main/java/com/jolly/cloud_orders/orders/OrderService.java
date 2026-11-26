@@ -13,6 +13,8 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
 
+    private static final BigDecimal MAX_TOTAL = new BigDecimal("9999999999.99");
+
     public OrderService(OrderRepository orderRepository) {
         this.orderRepository = orderRepository;
     }
@@ -25,6 +27,9 @@ public class OrderService {
                                 item.quantity()
                         ))
                 ).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalSum.compareTo(MAX_TOTAL) > 0) {
+            throw new OrderTotalTooLargeException(totalSum);
+        }
         Order order = new Order(
                 UUID.randomUUID(),
                 request.customerEmail(),
