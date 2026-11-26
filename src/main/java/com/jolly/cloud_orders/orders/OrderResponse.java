@@ -2,6 +2,7 @@ package com.jolly.cloud_orders.orders;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public record OrderResponse(
@@ -9,7 +10,8 @@ public record OrderResponse(
         String customerEmail,
         OrderStatus status,
         BigDecimal totalAmount,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        List<OrderItemResponse> items
 ) {
 
     public static OrderResponse from(Order order) {
@@ -18,7 +20,10 @@ public record OrderResponse(
                 order.getCustomerEmail(),
                 order.getStatus(),
                 order.getTotalAmount(),
-                order.getCreatedAt()
+                order.getCreatedAt(),
+                order.getItems().stream()
+                        .map(OrderItemResponse::from)
+                        .toList()
         );
     }
 }

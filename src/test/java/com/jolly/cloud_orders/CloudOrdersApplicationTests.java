@@ -19,6 +19,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 
 import org.junit.jupiter.api.Test;
@@ -54,12 +55,13 @@ class CloudOrdersApplicationTests {
     }
 
     @Test
-    void acceptsMinimumAmount() throws Exception {
+    void acceptsMinimumUnitPrice() throws Exception {
         mockMvc.perform(post("/orders")
                         .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerEmail":"email@mail.com","totalAmount":0.01}
+                                {"customerEmail":"email@mail.com",
+                                 "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":0.01}]}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
@@ -67,6 +69,20 @@ class CloudOrdersApplicationTests {
 
         assertThat(orderRepository.count()).isEqualTo(1L);
 
+    }
+
+    @Test
+    void rejectsOrderWithoutItemsWithoutSavingOrder() throws Exception {
+        mockMvc.perform(post("/orders")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"customerEmail":"email@mail.com","items":[]}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("items")));
+
+        assertThat(orderRepository.count()).isZero();
     }
 
 
@@ -79,16 +95,17 @@ class CloudOrdersApplicationTests {
     }
 
     @Test
-    void rejectsZeroAmountWithoutSavingOrder() throws Exception {
+    void rejectsZeroUnitPriceWithoutSavingOrder() throws Exception {
         mockMvc.perform(post("/orders")
                         .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerEmail":"email@mail.com","totalAmount":0}
+                                {"customerEmail":"email@mail.com",
+                                 "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":0}]}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors[*].field")
-                        .value(hasItem("totalAmount")));
+                        .value(hasItem("items[0].unitPrice")));
 
         assertThat(orderRepository.count()).isZero();
     }
@@ -99,7 +116,8 @@ class CloudOrdersApplicationTests {
                         .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerEmail":"bad-email","totalAmount":123.45}
+                                {"customerEmail":"bad-email",
+                                 "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":123.45}]}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors[*].field")
@@ -114,10 +132,15 @@ class CloudOrdersApplicationTests {
                         .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerEmail":"integration@example.com","totalAmount":123.45}
+                                {"customerEmail":"integration@example.com",
+                                 "items":[
+                                   {"sku":"BOOK-1","quantity":2,"unitPrice":10.50},
+                                   {"sku":"PEN-7","quantity":1,"unitPrice":3.00}
+                                 ]}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
+                .andExpect(jsonPath("$.totalAmount").value(24.00))
                 .andReturn().getResponse().getContentAsString();
 
         String id = JsonPath.read(response, "$.id");
@@ -128,7 +151,10 @@ class CloudOrdersApplicationTests {
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.customerEmail").value("integration@example.com"))
                 .andExpect(jsonPath("$.status").value("CREATED"))
-                .andExpect(jsonPath("$.totalAmount").value(123.45));
+                .andExpect(jsonPath("$.totalAmount").value(24.00))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                // The database does not guarantee item order, so check membership only.
+                .andExpect(jsonPath("$.items[*].sku").value(containsInAnyOrder("BOOK-1", "PEN-7")));
     }
 
     @Test
@@ -137,7 +163,8 @@ class CloudOrdersApplicationTests {
                         .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerEmail":"","totalAmount":12.34}
+                                {"customerEmail":"",
+                                 "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":12.34}]}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("customerEmail")));
@@ -151,10 +178,11 @@ class CloudOrdersApplicationTests {
                         .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerEmail":"validation@example.com","totalAmount":1.234}
+                                {"customerEmail":"validation@example.com",
+                                 "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":1.234}]}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("totalAmount")));
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("items[0].unitPrice")));
 
         assertThat(orderRepository.count()).isZero();
     }
@@ -165,10 +193,11 @@ class CloudOrdersApplicationTests {
                         .with(jwt().authorities(new SimpleGrantedAuthority("SCOPE_orders:write")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"customerEmail":"validation@example.com","totalAmount":10000000000.00}
+                                {"customerEmail":"validation@example.com",
+                                 "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":10000000000.00}]}
                                 """))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("totalAmount")));
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("items[0].unitPrice")));
 
         assertThat(orderRepository.count()).isZero();
     }
@@ -198,7 +227,7 @@ class CloudOrdersApplicationTests {
                         .content("""
                                 {
                                 "customerEmail": "security@example.com",
-                                "totalAmount": 123.45
+                                "items": [{"sku": "BOOK-1", "quantity": 1, "unitPrice": 123.45}]
                                 }
                                 """))
                 .andExpect(status().isUnauthorized());
@@ -220,7 +249,8 @@ class CloudOrdersApplicationTests {
                                 new SimpleGrantedAuthority("SCOPE_orders:read")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"customerEmail":"scope@example.com","totalAmount":12.34}
+                            {"customerEmail":"scope@example.com",
+                             "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":12.34}]}
                             """))
                 .andExpect(status().isForbidden());
 
@@ -248,7 +278,8 @@ class CloudOrdersApplicationTests {
                         .with(jwt().authorities(Collections.emptyList()))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                            {"customerEmail":"scope@example.com","totalAmount":12.34}
+                            {"customerEmail":"scope@example.com",
+                             "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":12.34}]}
                             """))
                 .andExpect(status().isForbidden());
 
